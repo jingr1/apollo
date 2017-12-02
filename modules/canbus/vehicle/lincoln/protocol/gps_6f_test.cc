@@ -39,10 +39,10 @@ TEST(Gps6fTest, General) {
 
   EXPECT_DOUBLE_EQ(cd.basic().hdop(), 3.6);
   EXPECT_DOUBLE_EQ(cd.basic().vdop(), 3.8);
-  EXPECT_DOUBLE_EQ(cd.basic().quality(), BasicInfo::FIX_INVALID);
+  EXPECT_DOUBLE_EQ(cd.basic().quality(), FIX_INVALID);
   EXPECT_DOUBLE_EQ(cd.basic().gps_speed(), 107.73664);
 }
 
 }  // namespace lincoln
-}  // namespace apollo
 }  // namespace canbus
+}  // namespace apollo

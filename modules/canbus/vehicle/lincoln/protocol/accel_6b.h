@@ -22,7 +22,8 @@
 #ifndef MODULES_CANBUS_VEHICLE_LINCOLN_PROTOCOL_ACCEL_6B_H_
 #define MODULES_CANBUS_VEHICLE_LINCOLN_PROTOCOL_ACCEL_6B_H_
 
-#include "modules/canbus/vehicle/protocol_data.h"
+#include "modules/drivers/canbus/can_comm/protocol_data.h"
+#include "modules/canbus/proto/chassis_detail.pb.h"
 
 /**
  * @namespace apollo::canbus::lincoln
@@ -37,7 +38,8 @@ namespace lincoln {
  *
  * @brief one of the protocol data of lincoln vehicle
  */
-class Accel6b : public ProtocolData {
+class Accel6b : public ::apollo::drivers::canbus::ProtocolData<
+                    ::apollo::canbus::ChassisDetail> {
  public:
   static const int32_t ID;
 
@@ -47,8 +49,8 @@ class Accel6b : public ProtocolData {
    * @param length the length of the input bytes
    * @param chassis_detail the parsed chassis_detail
    */
-  virtual void Parse(const std::uint8_t* bytes, int32_t length,
-                     ChassisDetail* chassis_detail) const;
+  virtual void Parse(const std::uint8_t *bytes, int32_t length,
+                     ChassisDetail *chassis_detail) const;
 
  private:
   /**
@@ -59,7 +61,7 @@ class Accel6b : public ProtocolData {
    * @param bytes a pointer to the byte array
    * @return the value of lateral acceleration
    */
-  double lateral_acceleration(const std::uint8_t* bytes,
+  double lateral_acceleration(const std::uint8_t *bytes,
                               const int32_t length) const;
 
   /**
@@ -71,7 +73,7 @@ class Accel6b : public ProtocolData {
    * @param length the length of the byte array
    * @return the value of longitudinal acceleration
    */
-  double longitudinal_acceleration(const std::uint8_t* bytes,
+  double longitudinal_acceleration(const std::uint8_t *bytes,
                                    const int32_t length) const;
   /**
    * @brief calculate vertical_acceleration based on byte array.
@@ -82,7 +84,7 @@ class Accel6b : public ProtocolData {
    * @param length the length of the byte array
    * @return the value of vertical acceleration
    */
-  double vertical_acceleration(const std::uint8_t* bytes,
+  double vertical_acceleration(const std::uint8_t *bytes,
                                const int32_t length) const;
 
   double parse_two_frames(const std::uint8_t low_byte,

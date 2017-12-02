@@ -10,7 +10,7 @@ cc_library(
 )
 
 cc_library(
-    name = "localization_app",
+    name = "localization_lib",
     srcs = [
         "localization.cc",
     ],
@@ -22,7 +22,6 @@ cc_library(
         "//modules/common:apollo_app",
         "//modules/common/util:factory",
         "//modules/localization:localization_base",
-        "//modules/localization/camera:camera_localization",
         "//modules/localization/rtk:rtk_localization",
     ],
 )
@@ -36,7 +35,7 @@ cc_binary(
         "//modules/localization/conf:localization_adapter_manager_config",
     ],
     deps = [
-        ":localization_app",
+        ":localization_lib",
     ],
 )
 

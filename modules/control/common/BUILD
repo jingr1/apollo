@@ -26,6 +26,20 @@ cc_library(
 )
 
 cc_library(
+    name = "interpolation_1d",
+    srcs = [
+        "interpolation_1d.cc",
+    ],
+    hdrs = [
+        "interpolation_1d.h",
+    ],
+    deps = [
+        "//modules/common:log",
+        "@eigen//:eigen",
+    ],
+)
+
+cc_library(
     name = "interpolation_2d",
     srcs = [
         "interpolation_2d.cc",
@@ -54,6 +68,38 @@ cc_library(
 )
 
 cc_library(
+    name = "pid_BC_controller",
+    srcs = [
+        "pid_BC_controller.cc",
+    ],
+    hdrs = [
+        "pid_BC_controller.h",
+    ],
+    deps = [
+        ":pid_controller",
+        "//modules/common:log",
+        "//modules/common/math",
+        "//modules/control/proto:control_proto",
+    ],
+)
+
+cc_library(
+    name = "pid_IC_controller",
+    srcs = [
+        "pid_IC_controller.cc",
+    ],
+    hdrs = [
+        "pid_IC_controller.h",
+    ],
+    deps = [
+        ":pid_controller",
+        "//modules/common:log",
+        "//modules/common/math",
+        "//modules/control/proto:control_proto",
+    ],
+)
+
+cc_library(
     name = "trajectory_analyzer",
     srcs = [
         "trajectory_analyzer.cc",
@@ -65,8 +111,8 @@ cc_library(
         "//modules/common:log",
         "//modules/common/math:linear_interpolation",
         "//modules/common/math:search",
-        "//modules/common/proto:path_point_proto",
-        "//modules/common/vehicle_state",
+        "//modules/common/proto:pnc_point_proto",
+        "//modules/common/vehicle_state:vehicle_state_provider",
         "//modules/planning/proto:planning_proto",
     ],
 )
@@ -76,6 +122,7 @@ cc_library(
     deps = [
         ":control_gflags",
         ":hysteresis_filter",
+        ":interpolation_1d",
         ":interpolation_2d",
         ":pid_controller",
         ":trajectory_analyzer",
@@ -90,6 +137,22 @@ cc_test(
     ],
     deps = [
         ":hysteresis_filter",
+        "@gtest//:main",
+    ],
+)
+
+cc_test(
+    name = "interpolation_1d_test",
+    size = "small",
+    srcs = [
+        "interpolation_1d_test.cc",
+    ],
+    data = ["//modules/control:control_testdata"],
+    deps = [
+        ":interpolation_1d",
+        "//modules/common:log",
+        "//modules/common/util",
+        "//modules/control/proto:control_proto",
         "@gtest//:main",
     ],
 )
@@ -119,6 +182,36 @@ cc_test(
     data = ["//modules/control:control_testdata"],
     deps = [
         ":pid_controller",
+        "//modules/common/util",
+        "//modules/control/proto:control_proto",
+        "@gtest//:main",
+    ],
+)
+
+cc_test(
+    name = "pid_BC_controller_test",
+    size = "small",
+    srcs = [
+        "pid_BC_controller_test.cc",
+    ],
+    data = ["//modules/control:control_testdata"],
+    deps = [
+        ":pid_BC_controller",
+        "//modules/common/util",
+        "//modules/control/proto:control_proto",
+        "@gtest//:main",
+    ],
+)
+
+cc_test(
+    name = "pid_IC_controller_test",
+    size = "small",
+    srcs = [
+        "pid_IC_controller_test.cc",
+    ],
+    data = ["//modules/control:control_testdata"],
+    deps = [
+        ":pid_IC_controller",
         "//modules/common/util",
         "//modules/control/proto:control_proto",
         "@gtest//:main",

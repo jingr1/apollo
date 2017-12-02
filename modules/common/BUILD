@@ -1,3 +1,5 @@
+load("//tools:cpplint.bzl", "cpplint")
+
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
@@ -5,8 +7,8 @@ cc_library(
     deps = [
         ":log",
         ":macro",
-        "@ros//:ros_common",
         "@glog//:glog",
+        "@ros//:ros_common",
     ],
 )
 
@@ -36,9 +38,11 @@ cc_library(
         "apollo_app.h",
     ],
     deps = [
+        ":log",
         "//modules/common/status",
-        "//modules/hmi/utils:hmi_status_helper",
+        "//modules/common/util:string_util",
         "@ros//:ros_common",
-        "@glog//:glog",
     ],
 )
+
+cpplint()

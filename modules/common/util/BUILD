@@ -1,3 +1,5 @@
+load("//tools:cpplint.bzl", "cpplint")
+
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
@@ -13,8 +15,11 @@ cc_library(
         "util.h",
     ],
     deps = [
+        ":string_util",
         "//modules/common/math",
+        "//modules/common/proto:pnc_point_proto",
         "//modules/common/time",
+        "//modules/perception/proto:perception_proto",
     ],
 )
 
@@ -27,6 +32,41 @@ cc_test(
     deps = [
         ":util",
         "@gtest//:main",
+    ],
+)
+
+cc_library(
+    name = "lru_cache",
+    hdrs = ["lru_cache.h"],
+)
+
+cc_library(
+    name = "string_util",
+    hdrs = [
+        "string_util.h",
+    ],
+    deps = [
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "string_util_test",
+    size = "small",
+    srcs = [
+        "string_util_test.cc",
+    ],
+    deps = [
+        ":string_util",
+        "@gtest//:main",
+    ],
+)
+
+cc_library(
+    name = "map_util",
+    hdrs = ["map_util.h"],
+    deps = [
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -66,6 +106,30 @@ cc_test(
     ],
 )
 
+cc_library(
+    name = "dropbox",
+    hdrs = [
+        "dropbox.h",
+    ],
+    deps = [
+        "//modules/common:log",
+    ],
+)
+
+cc_test(
+    name = "dropbox_test",
+    size = "small",
+    srcs = [
+        "dropbox_test.cc",
+    ],
+    deps = [
+        ":dropbox",
+        "//modules/common",
+        "//modules/common:log",
+        "@gtest//:main",
+    ],
+)
+
 cc_test(
     name = "file_test",
     size = "small",
@@ -77,7 +141,44 @@ cc_test(
     ],
     deps = [
         ":util",
-        "//modules/common/util/testing:simple_proto",
+        "//modules/common/util/testdata:simple_proto",
         "@gtest//:main",
     ],
 )
+
+cc_test(
+    name = "lru_cache_test",
+    size = "small",
+    srcs = [
+        "lru_cache_test.cc",
+    ],
+    deps = [
+        "//modules/common/util:lru_cache",
+        "@gtest//:main",
+    ],
+)
+
+cc_library(
+    name = "points_downsampler",
+    hdrs = [
+        "points_downsampler.h",
+    ],
+    deps = [
+        "//modules/common:log",
+        "//modules/common/math:vec2d",
+    ],
+)
+
+cc_test(
+    name = "points_downsampler_test",
+    size = "small",
+    srcs = [
+        "points_downsampler_test.cc",
+    ],
+    deps = [
+        ":points_downsampler",
+        "@gtest//:main",
+    ],
+)
+
+cpplint()

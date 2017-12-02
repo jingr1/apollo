@@ -26,17 +26,9 @@
 #include "modules/control/control.h"
 #include "modules/control/proto/control_cmd.pb.h"
 
-#define TMAIN                                            \
-  int main(int argc, char** argv) {                      \
-    ::testing::InitGoogleTest(&argc, argv);              \
-    google::InitGoogleLogging(argv[0]);                  \
-    ::google::ParseCommandLineFlags(&argc, &argv, true); \
-    return RUN_ALL_TESTS();                              \
-  }
-
 #define RUN_GOLDEN_TEST                                            \
   {                                                                \
-    const ::testing::TestInfo* const test_info =                   \
+    const ::testing::TestInfo *const test_info =                   \
         ::testing::UnitTest::GetInstance()->current_test_info();   \
     bool run_control_success = test_control(test_info->name(), 0); \
     EXPECT_TRUE(run_control_success);                              \
@@ -63,13 +55,13 @@ class ControlTestBase : public ::testing::Test {
   virtual void SetUp();
 
   bool test_control();
-  bool test_control(const std::string& test_case_name, int case_num);
+  bool test_control(const std::string &test_case_name, int case_num);
 
  private:
-  void trim_control_command(apollo::control::ControlCommand* origin);
+  void trim_control_command(apollo::control::ControlCommand *origin);
   ControlCommand control_command_;
   Control control_;
-  static uint32_t _s_seq_num;
+  static uint32_t s_seq_num_;
 };
 
 }  // namespace control
