@@ -15,12 +15,29 @@
  *****************************************************************************/
 
 #include "modules/perception/perception.h"
+
+#include "ros/include/ros/ros.h"
+
 #include "modules/common/adapters/adapter_manager.h"
 #include "modules/common/log.h"
 #include "modules/perception/common/perception_gflags.h"
 #include "modules/perception/obstacle/base/object.h"
-#include "modules/perception/obstacle/onboard/lidar_process.h"
-#include "ros/include/ros/ros.h"
+#include "modules/perception/obstacle/onboard/async_fusion_subnode.h"
+#include "modules/perception/obstacle/onboard/camera_process_subnode.h"
+#include "modules/perception/obstacle/onboard/camera_shared_data.h"
+#include "modules/perception/obstacle/onboard/cipv_subnode.h"
+#include "modules/perception/obstacle/onboard/fusion_shared_data.h"
+#include "modules/perception/obstacle/onboard/fusion_subnode.h"
+#include "modules/perception/obstacle/onboard/lane_post_processing_subnode.h"
+#include "modules/perception/obstacle/onboard/lane_shared_data.h"
+#include "modules/perception/obstacle/onboard/lidar_process_subnode.h"
+#include "modules/perception/obstacle/onboard/motion_service.h"
+#include "modules/perception/obstacle/onboard/object_shared_data.h"
+#include "modules/perception/obstacle/onboard/radar_process_subnode.h"
+#include "modules/perception/obstacle/onboard/visualization_subnode.h"
+#include "modules/perception/obstacle/onboard/ultrasonic_obstacle_subnode.h"
+#include "modules/perception/traffic_light/onboard/tl_preprocessor_subnode.h"
+#include "modules/perception/traffic_light/onboard/tl_proc_subnode.h"
 
 namespace apollo {
 namespace perception {
@@ -29,42 +46,61 @@ using apollo::common::adapter::AdapterManager;
 using apollo::common::Status;
 using apollo::common::ErrorCode;
 
-std::string Perception::Name() const {
-  return "perception";
-}
+std::string Perception::Name() const { return "perception"; }
 
 Status Perception::Init() {
   AdapterManager::Init(FLAGS_perception_adapter_config_filename);
 
-  lidar_process_.reset(new LidarProcess());
-  if (lidar_process_ != nullptr && !lidar_process_->Init()) {
-    AERROR << "failed to init lidar_process.";
-    return Status(ErrorCode::PERCEPTION_ERROR, "failed to init lidar_process.");
-  }
+  RegistAllOnboardClass();
+  const std::string dag_config_path = apollo::common::util::GetAbsolutePath(
+      FLAGS_work_root, FLAGS_dag_config_path);
 
-  CHECK(AdapterManager::GetPointCloud()) << "PointCloud is not initialized.";
-  AdapterManager::AddPointCloudCallback(&Perception::RunOnce, this);
+  if (!dag_streaming_.Init(dag_config_path)) {
+    AERROR << "failed to Init DAGStreaming. dag_config_path:"
+           << dag_config_path;
+    return Status(ErrorCode::PERCEPTION_ERROR, "failed to Init DAGStreaming.");
+  }
+  callback_thread_num_ = 5;
+
   return Status::OK();
 }
 
-void Perception::RunOnce(const sensor_msgs::PointCloud2& message) {
-  ADEBUG << "get point cloud callback";
+void Perception::RegistAllOnboardClass() {
+  /// regist sharedata
+  RegisterFactoryLidarObjectData();
+  RegisterFactoryRadarObjectData();
+  RegisterFactoryCameraObjectData();
+  RegisterFactoryCameraSharedData();
+  RegisterFactoryCIPVObjectData();
+  RegisterFactoryLaneSharedData();
+  RegisterFactoryFusionSharedData();
+  traffic_light::RegisterFactoryTLPreprocessingData();
 
-  if (lidar_process_ != nullptr && lidar_process_->IsInit()) {
-    lidar_process_->Process(message);
-
-    /// publish obstacle message
-    PerceptionObstacles obstacles;
-    lidar_process_->GeneratePbMsg(&obstacles);
-    Publish(&obstacles);
-  }
+  /// regist subnode
+  RegisterFactoryLidar64ProcessSubnode();
+  RegisterFactoryLidar16ProcessSubnode();
+  RegisterFactoryRadarProcessSubnode();
+  RegisterFactoryCameraProcessSubnode();
+  RegisterFactoryCIPVSubnode();
+  RegisterFactoryLanePostProcessingSubnode();
+  RegisterFactoryAsyncFusionSubnode();
+  RegisterFactoryFusionSubnode();
+  RegisterFactoryMotionService();
+  RegisterFactoryUltrasonicObstacleSubnode();
+  lowcostvisualizer::RegisterFactoryVisualizationSubnode();
+  traffic_light::RegisterFactoryTLPreprocessorSubnode();
+  traffic_light::RegisterFactoryTLProcSubnode();
 }
 
 Status Perception::Start() {
+  dag_streaming_.Start();
   return Status::OK();
 }
 
-void Perception::Stop() {}
+void Perception::Stop() {
+  dag_streaming_.Stop();
+  dag_streaming_.Join();
+}
 
 }  // namespace perception
 }  // namespace apollo

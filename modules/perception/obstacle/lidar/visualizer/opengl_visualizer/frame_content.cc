@@ -15,14 +15,17 @@
  *****************************************************************************/
 
 #include "modules/perception/obstacle/lidar/visualizer/opengl_visualizer/frame_content.h"
+
 #include "modules/common/log.h"
 
 namespace apollo {
 namespace perception {
 
 FrameContent::FrameContent()
-    : pose_v2w_(Eigen::Matrix4d::Identity()), cloud_(new pcl_util::PointCloud),
-      roi_cloud_(new pcl_util::PointCloud), global_offset_initialized_(false) {}
+    : pose_v2w_(Eigen::Matrix4d::Identity()),
+      cloud_(new pcl_util::PointCloud),
+      roi_cloud_(new pcl_util::PointCloud),
+      global_offset_initialized_(false) {}
 
 FrameContent::~FrameContent() {}
 
@@ -63,7 +66,7 @@ bool FrameContent::HasCloud() {
   return true;
 }
 
-void FrameContent::OffsetPointcloud(pcl_util::PointCloud* cloud,
+void FrameContent::OffsetPointcloud(pcl_util::PointCloud *cloud,
                                     const Eigen::Vector3d &offset) {
   for (size_t i = 0; i < cloud->size(); ++i) {
     cloud->points[i].x += offset[0];
@@ -72,7 +75,7 @@ void FrameContent::OffsetPointcloud(pcl_util::PointCloud* cloud,
   }
 }
 
-void FrameContent::OffsetPointcloud(pcl_util::PointDCloud* cloud,
+void FrameContent::OffsetPointcloud(pcl_util::PointDCloud *cloud,
                                     const Eigen::Vector3d &offset) {
   for (size_t i = 0; i < cloud->size(); ++i) {
     cloud->points[i].x += offset[0];
@@ -81,7 +84,7 @@ void FrameContent::OffsetPointcloud(pcl_util::PointDCloud* cloud,
   }
 }
 
-void FrameContent::OffsetObject(ObjectPtr object,
+void FrameContent::OffsetObject(std::shared_ptr<Object> object,
                                 const Eigen::Vector3d &offset) {
   OffsetPointcloud(object->cloud.get(), offset);
   OffsetPointcloud(&(object->polygon), offset);
@@ -91,17 +94,18 @@ void FrameContent::OffsetObject(ObjectPtr object,
   object->center[2] += offset[2];
 }
 
-void FrameContent::SetTrackedObjects(const std::vector<ObjectPtr> &objects) {
-  tracked_objects_lidar_.resize(objects.size());
+void FrameContent::SetTrackedObjects(
+    const std::vector<std::shared_ptr<Object>> &objects) {
+  tracked_objects_.resize(objects.size());
   for (size_t i = 0; i < objects.size(); ++i) {
-    tracked_objects_lidar_[i].reset(new Object);
-    tracked_objects_lidar_[i]->clone(*objects[i]);
-    OffsetObject(tracked_objects_lidar_[i], global_offset_);
+    tracked_objects_[i].reset(new Object);
+    tracked_objects_[i]->clone(*objects[i]);
+    OffsetObject(tracked_objects_[i], global_offset_);
   }
 }
 
-std::vector<ObjectPtr> FrameContent::GetTrackedObjects() {
-  return tracked_objects_lidar_;
+std::vector<std::shared_ptr<Object>> FrameContent::GetTrackedObjects() {
+  return tracked_objects_;
 }
 
 }  // namespace perception

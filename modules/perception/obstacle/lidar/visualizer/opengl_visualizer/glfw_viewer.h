@@ -17,10 +17,12 @@
 #ifndef MODULES_PERCEPTION_OBSTACLE_LIDAR_VISUALIZER_GLFW_VIEWER_H_
 #define MODULES_PERCEPTION_OBSTACLE_LIDAR_VISUALIZER_GLFW_VIEWER_H_
 
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
+#include <memory>
 
 #include "Eigen/Dense"
+#include "GL/glew.h"
+#include "GLFW/glfw3.h"
+
 #include "modules/perception/obstacle/lidar/visualizer/opengl_visualizer/camera.h"
 #include "modules/perception/obstacle/lidar/visualizer/opengl_visualizer/frame_content.h"
 
@@ -33,7 +35,7 @@ class GLFWViewer {
 
   bool Initialize();
 
-  void SetFrameContent(const FrameContent& frame_content) {
+  void SetFrameContent(const FrameContent &frame_content) {
     frame_content_ = frame_content;
   }
   void Spin();
@@ -80,8 +82,8 @@ class GLFWViewer {
   void DrawCircle();
   void DrawCarForwardDir();
   void DrawObstacles();
-  void DrawObstacle(const ObjectPtr obj, bool show_cloud, bool show_polygon,
-                    bool show_velocity, bool show_direction);
+  void DrawObstacle(const std::shared_ptr<Object> obj, bool show_cloud,
+                    bool show_polygon, bool show_velocity, bool show_direction);
   void DrawOffsetVolumn(Eigen::Vector3d *polygon_points, double h,
                         int polygon_size);
 
@@ -110,7 +112,7 @@ class GLFWViewer {
   bool show_direction_;
   bool show_polygon_;
 
-  enum OBJ_Type {
+  enum class OBJ_Type {
     CIRCIE = 0,
     CUBE = 1,
     CLOUD = 2,
@@ -118,7 +120,7 @@ class GLFWViewer {
     NUM_VAO_TYPE = 4
   };
 
-  enum VBO_Type {
+  enum class VBO_Type {
     VBO_VERTICES = 0,
     VBO_COLORS = 1,
     VBO_ELEMENTS = 2,
@@ -129,15 +131,17 @@ class GLFWViewer {
   static const int kCloud_VAO_Num_ = 35;
   static const int kPoint_Num_Per_Cloud_VAO_ = 10000;
   GLuint cloud_VAO_buf_ids_[kCloud_VAO_Num_];
-  GLuint cloud_VBO_buf_ids_[kCloud_VAO_Num_][NUM_VBO_TYPE];  // each VAO has
-                                                           // NUM_VBO_TYPE VBOs
+  // each VAO has NUM_VBO_TYPE VBOs
+  GLuint cloud_VBO_buf_ids_[kCloud_VAO_Num_]
+                           [static_cast<int>(VBO_Type::NUM_VBO_TYPE)];
   GLfloat cloud_verts_[kPoint_Num_Per_Cloud_VAO_][3];
 
   // circle
   static const int kCircle_VAO_Num_ = 3;
   static const int kPoint_Num_Per_Circle_VAO_ = 256;
   GLuint circle_VAO_buf_ids_[kCircle_VAO_Num_];
-  GLuint circle_VBO_buf_ids_[kCircle_VAO_Num_][NUM_VBO_TYPE];
+  GLuint circle_VBO_buf_ids_[kCircle_VAO_Num_]
+                            [static_cast<int>(VBO_Type::NUM_VBO_TYPE)];
 };
 
 }  // namespace perception

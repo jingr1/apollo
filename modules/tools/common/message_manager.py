@@ -25,6 +25,8 @@ from modules.prediction.proto import prediction_obstacle_pb2
 from modules.routing.proto import routing_pb2
 from modules.control.proto import control_cmd_pb2
 from modules.canbus.proto import chassis_pb2
+from modules.common.proto import drive_event_pb2
+from modules.map.relative_map.proto import navigation_pb2
 
 import proto_utils
 
@@ -71,7 +73,12 @@ topic_pb_list = [
     MessageType("localization", "/apollo/localization/pose",
                 localization_pb2.LocalizationEstimate),
     MessageType("traffic_light", "/apollo/perception/traffic_light",
-                traffic_light_detection_pb2.TrafficLightDetection)
+                traffic_light_detection_pb2.TrafficLightDetection),
+    MessageType("drive_event", "/apollo/drive_event",
+                drive_event_pb2.DriveEvent),
+    MessageType("relative_map", "/apollo/relative_map", navigation_pb2.MapMsg),
+    MessageType("relative_map", "/apollo/navigation",
+                navigation_pb2.NavigationInfo),
 ]
 
 
@@ -107,7 +114,7 @@ class PbMessageManager:
             print("topic %s is not registered in topic_pb_list" % topic)
             return None
         meta_msg = self.__topic_dict[topic]
-        return meta_msg.parse(filename)
+        return meta_msg.parse_file(filename)
 
     def parse_file(self, filename):
         """parse a file by guessing topic type"""

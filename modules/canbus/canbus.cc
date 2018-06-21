@@ -27,27 +27,25 @@
 namespace apollo {
 namespace canbus {
 
-using apollo::common::adapter::AdapterConfig;
-using apollo::common::adapter::AdapterManager;
-using apollo::common::monitor::MonitorMessageItem;
-using apollo::common::Status;
 using apollo::common::ErrorCode;
-using apollo::drivers::canbus::CanClientFactory;
-
-using apollo::control::ControlCommand;
+using apollo::common::Status;
+using apollo::common::adapter::AdapterManager;
 using apollo::common::time::Clock;
+using apollo::control::ControlCommand;
+using apollo::drivers::canbus::CanClientFactory;
+using apollo::guardian::GuardianCommand;
 
 std::string Canbus::Name() const { return FLAGS_canbus_module_name; }
 
 Status Canbus::Init() {
+  AdapterManager::Init(FLAGS_canbus_adapter_config_filename);
+  AINFO << "The adapter manager is successfully initialized.";
+
   // load conf
   if (!common::util::GetProtoFromFile(FLAGS_canbus_conf_file, &canbus_conf_)) {
     return OnError("Unable to load canbus conf file: " +
                    FLAGS_canbus_conf_file);
   }
-
-  AdapterManager::Init(FLAGS_adapter_config_filename);
-  AINFO << "The adapter manager is successfully initialized.";
 
   AINFO << "The canbus conf file is loaded: " << FLAGS_canbus_conf_file;
   ADEBUG << "Canbus_conf:" << canbus_conf_.ShortDebugString();
@@ -99,6 +97,15 @@ Status Canbus::Init() {
   }
   AINFO << "The vehicle controller is successfully initialized.";
 
+  CHECK(AdapterManager::GetControlCommand()) << "Control is not initialized.";
+  CHECK(AdapterManager::GetGuardian()) << "Guardian is not initialized.";
+  // TODO(QiL) : depreacte this
+  if (!FLAGS_receive_guardian) {
+    AdapterManager::AddControlCommandCallback(&Canbus::OnControlCommand, this);
+  } else {
+    AdapterManager::AddGuardianCallback(&Canbus::OnGuardianCommand, this);
+  }
+
   return Status::OK();
 }
 
@@ -129,10 +136,9 @@ Status Canbus::Start() {
   const double duration = 1.0 / FLAGS_chassis_freq;
   timer_ = AdapterManager::CreateTimer(ros::Duration(duration),
                                        &Canbus::OnTimer, this);
-  AdapterManager::AddControlCommandCallback(&Canbus::OnControlCommand, this);
 
   // last step: publish monitor messages
-  apollo::common::monitor::MonitorBuffer buffer(&monitor_);
+  apollo::common::monitor::MonitorLogBuffer buffer(&monitor_logger_);
   buffer.INFO("Canbus is started.");
 
   return Status::OK();
@@ -195,9 +201,15 @@ void Canbus::OnControlCommand(const ControlCommand &control_command) {
   can_sender_.Update();
 }
 
+void Canbus::OnGuardianCommand(const GuardianCommand &guardian_command) {
+  apollo::control::ControlCommand control_command;
+  control_command.CopyFrom(guardian_command.control_command());
+  OnControlCommand(control_command);
+}
+
 // Send the error to monitor and return it
 Status Canbus::OnError(const std::string &error_msg) {
-  apollo::common::monitor::MonitorBuffer buffer(&monitor_);
+  apollo::common::monitor::MonitorLogBuffer buffer(&monitor_logger_);
   buffer.ERROR(error_msg);
   return Status(ErrorCode::CANBUS_ERROR, error_msg);
 }

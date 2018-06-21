@@ -22,7 +22,7 @@
 #include <vector>
 #include "caffe/caffe.hpp"
 #include "modules/common/log.h"
-#include "modules/perception/lib/pcl_util/pcl_types.h"
+#include "modules/perception/common/pcl_types.h"
 #include "modules/perception/obstacle/lidar/segmentation/cnnseg/proto/cnnseg.pb.h"
 
 namespace apollo {
@@ -38,7 +38,7 @@ class FeatureGenerator {
 
   bool Init(const FeatureParam& feature_param, caffe::Blob<Dtype>* out_blob);
 
-  void Generate(const apollo::perception::pcl_util::PointCloudConstPtr& pc_ptr);
+  void Generate(apollo::perception::pcl_util::PointCloudConstPtr pc_ptr);
 
   inline std::string name() const { return "FeatureGenerator"; }
 
@@ -83,4 +83,4 @@ typedef FeatureGenerator<double> FP64FeatureGenerator;
 }  // namespace perception
 }  // namespace apollo
 
-#endif  // MODULES_PERCEPTION_OBSTACLE_LIDAR_SEGMENTATION_CNNSEG_FEATURE_GENERATOR_H_  // NOLINT
+#endif

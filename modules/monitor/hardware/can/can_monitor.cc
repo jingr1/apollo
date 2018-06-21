@@ -20,6 +20,7 @@
 #include "modules/canbus/proto/canbus_conf.pb.h"
 #include "modules/common/log.h"
 #include "modules/common/util/file.h"
+#include "modules/monitor/common/monitor_manager.h"
 #include "modules/monitor/hardware/can/can_checker_factory.h"
 
 DEFINE_string(can_hardware_name, "CAN", "Name of the CAN hardware.");
@@ -57,7 +58,7 @@ void CanMonitor::RunOnce(const double current_time) {
   CHECK_EQ(can_rslt.size(), 1);
 
   status->set_status(static_cast<HardwareStatus::Status>(can_rslt[0].status));
-  status->set_msg(can_rslt[0].mssg);
+  status->set_detailed_msg(can_rslt[0].mssg);
   ADEBUG << "Done checking " << FLAGS_can_hardware_name
          << ", status=" << status->status();
 }

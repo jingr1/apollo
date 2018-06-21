@@ -21,6 +21,7 @@
 #ifndef MODULES_MAP_PNC_MAP_PNC_MAP_H_
 #define MODULES_MAP_PNC_MAP_PNC_MAP_H_
 
+#include <array>
 #include <limits>
 #include <list>
 #include <memory>
@@ -30,8 +31,9 @@
 #include <vector>
 
 #include "gflags/gflags.h"
+#include "gtest/gtest_prod.h"
 
-#include "modules/common/proto/vehicle_state.pb.h"
+#include "modules/common/vehicle_state/proto/vehicle_state.pb.h"
 #include "modules/routing/proto/routing.pb.h"
 
 #include "modules/map/hdmap/hdmap.h"
@@ -55,15 +57,17 @@ class PncMap {
   static bool CreatePathFromLaneSegments(const RouteSegments &segments,
                                          Path *const path);
 
-  bool GetRouteSegments(const common::VehicleState &state,
+  bool GetRouteSegments(const common::VehicleState &vehicle_state,
                         const double backward_length,
                         const double forward_length,
-                        std::list<RouteSegments> *const route_segments) const;
+                        std::list<RouteSegments> *const route_segments);
 
   /**
    * Check if the routing is the same as existing one in PncMap
    */
   bool IsNewRouting(const routing::RoutingResponse &routing_response) const;
+  static bool IsNewRouting(const routing::RoutingResponse &prev,
+                           const routing::RoutingResponse &routing_response);
 
   bool ExtendSegments(const RouteSegments &segments,
                       const common::PointENU &point, double look_forward,
@@ -73,17 +77,20 @@ class PncMap {
                       double end_s,
                       RouteSegments *const truncated_segments) const;
 
+  std::vector<routing::LaneWaypoint> FutureRouteWaypoints() const;
+
  private:
+  bool UpdateVehicleState(const common::VehicleState &vehicle_state);
+  /**
+   * @brief Find the waypoint index of a routing waypoint. It updates
+   * adc_route_index_
+   * @return index out of range if cannot find waypoint on routing, otherwise
+   *   an index in range [0, route_indices.size());
+   */
+  int GetWaypointIndex(const LaneWaypoint &waypoint) const;
+
   bool GetNearestPointFromRouting(const common::VehicleState &point,
                                   LaneWaypoint *waypoint) const;
-
-  /**
-   * Find the waypoint index of a routing waypoint.
-   * @return a vector with three values: Road index in RoutingResponse, Passage
-   * index in RoadSegment, and segment index in a Passage. (-1, -1, -1) will be
-   * returned if there is any error.
-   */
-  std::vector<int> GetWaypointIndex(const LaneWaypoint &waypoint) const;
 
   bool PassageToSegments(routing::Passage passage,
                          RouteSegments *segments) const;
@@ -111,11 +118,107 @@ class PncMap {
   std::vector<int> GetNeighborPassages(const routing::RoadSegment &road,
                                        int start_passage) const;
 
+  /**
+   * @brief convert a routing waypoint to lane waypoint
+   * @return empty LaneWaypoint if the lane id cannot be found on map, otherwise
+   * return a valid LaneWaypoint with lane ptr and s.
+   */
+  LaneWaypoint ToLaneWaypoint(const routing::LaneWaypoint &waypoint) const;
+
+  /**
+   * @brief convert a routing segment to lane segment
+   * @return empty LaneSegmetn if the lane id cannot be found on map, otherwise
+   * return a valid LaneSegment with lane ptr, start_s and end_s
+   */
+  LaneSegment ToLaneSegment(const routing::LaneSegment &segment) const;
+
+  /**
+   * @brief Update routing waypoint index to the next waypoint that ADC need to
+   * pass. The logic is by comparing the current waypoint's route index with
+   * route_index and adc_waypoint_:
+   * a. If the waypoint's route_index < route_index_, ADC must have passed
+   * the waypoint.
+   * b. If the waypoint's route_index == route_index_, ADC and the waypoint
+   * is on the same lane, compare the lane_s.
+   */
+  void UpdateNextRoutingWaypointIndex(int cur_index);
+
+  /**
+   * @brief find the index of waypoint by looking forward from index start.
+   * @return empty vector if not found, otherwise return a vector { road_index,
+   * passage_index, lane_index}
+   */
+  int SearchForwardWaypointIndex(int start, const LaneWaypoint &waypoint) const;
+  int SearchBackwardWaypointIndex(int start,
+                                  const LaneWaypoint &waypoint) const;
+
+  void UpdateRoutingRange(int adc_index);
+
  private:
   routing::RoutingResponse routing_;
-  std::unordered_set<std::string> routing_lane_ids_;
+  struct RouteIndex {
+    LaneSegment segment;
+    std::array<int, 3> index;
+  };
+  std::vector<RouteIndex> route_indices_;
+  int range_start_ = 0;
+  int range_end_ = 0;
+  // routing ids in range
+  std::unordered_set<std::string> range_lane_ids_;
+  std::unordered_set<std::string> all_lane_ids_;
+
+  /**
+   * The routing request waypoints
+   */
+  struct WaypointIndex {
+    LaneWaypoint waypoint;
+    int index;
+    WaypointIndex(const LaneWaypoint &waypoint, int index)
+        : waypoint(waypoint), index(index) {}
+  };
+
+  // return the segment of an index
+  int NextWaypointIndex(int index) const;
+
+  std::vector<WaypointIndex> routing_waypoint_index_;
+  /**
+   * The next routing request waypoint index in routing_waypoint_index_
+   */
+  std::size_t next_routing_waypoint_index_ = 0;
+
   const hdmap::HDMap *hdmap_ = nullptr;
   bool is_same_routing_ = false;
+
+  /**
+   * The state of the adc
+   */
+  common::VehicleState adc_state_;
+  /**
+   * A three element index: {road_index, passage_index, lane_index}
+   */
+  int adc_route_index_ = -1;
+  /**
+   * The waypoint of the autonomous driving car
+   */
+  LaneWaypoint adc_waypoint_;
+
+  /**
+   * @brief Indicates whether the adc should start consider destination.
+   * In a looped routing, the vehicle may need to pass by the destination
+   * point
+   * may times on the road, but only need to stop when it encounters
+   * destination
+   * for the last time.
+   */
+  bool stop_for_destination_ = false;
+
+  FRIEND_TEST(PncMapTest, UpdateRouting);
+  FRIEND_TEST(PncMapTest, GetNearestPointFromRouting);
+  FRIEND_TEST(PncMapTest, UpdateWaypointIndex);
+  FRIEND_TEST(PncMapTest, UpdateNextRoutingWaypointIndex);
+  FRIEND_TEST(PncMapTest, GetNeighborPassages);
+  FRIEND_TEST(PncMapTest, NextWaypointIndex);
+  FRIEND_TEST(PncMapTest, SearchForwardIndex_SearchBackwardIndex);
 };
 
 }  // namespace hdmap

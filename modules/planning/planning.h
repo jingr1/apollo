@@ -25,14 +25,16 @@
 #include "modules/common/proto/pnc_point.pb.h"
 #include "modules/planning/proto/planning.pb.h"
 #include "modules/planning/proto/planning_config.pb.h"
+#include "modules/planning/proto/traffic_rule_config.pb.h"
 
+#include "modules/common/adapters/adapter_manager.h"
+#include "modules/common/apollo_app.h"
 #include "modules/common/status/status.h"
 #include "modules/common/util/factory.h"
 #include "modules/common/vehicle_state/vehicle_state_provider.h"
 #include "modules/planning/common/frame.h"
 #include "modules/planning/common/trajectory/publishable_trajectory.h"
 #include "modules/planning/planner/planner.h"
-#include "modules/planning/planning_interface.h"
 
 /**
  * @namespace apollo::planning
@@ -47,8 +49,10 @@ namespace planning {
  * @brief Planning module main class. It processes GPS and IMU as input,
  * to generate planning info.
  */
-class Planning : public PlanningInterface {
+class Planning : public apollo::common::ApolloApp {
  public:
+  Planning() = default;
+  virtual ~Planning();
   /**
    * @brief module name
    * @return module name
@@ -69,12 +73,18 @@ class Planning : public PlanningInterface {
 
   /**
    * @brief module stop function
-   * @return stop status
    */
   void Stop() override;
 
-  void RunOnce() override;
+  /**
+   * @brief main logic of the planning module, runs periodically triggered by
+   * timer.
+   */
+  void RunOnce();
 
+  /**
+   * @brief record last planning trajectory
+   */
   void SetLastPublishableTrajectory(const ADCTrajectory& adc_trajectory);
 
  private:
@@ -83,11 +93,19 @@ class Planning : public PlanningInterface {
 
   void PublishPlanningPb(ADCTrajectory* trajectory_pb, double timestamp);
 
+  /**
+   * @brief Fill the header and publish the planning message.
+   */
+  void Publish(planning::ADCTrajectory* trajectory) {
+    using apollo::common::adapter::AdapterManager;
+    AdapterManager::FillPlanningHeader(Name(), trajectory);
+    AdapterManager::PublishPlanning(*trajectory);
+  }
+
   void RegisterPlanners();
 
   /**
    * @brief Plan the trajectory given current vehicle state
-   * @param is_on_auto_mode whether the current system is on auto-driving mode
    */
   common::Status Plan(
       const double current_time_stamp,
@@ -96,14 +114,27 @@ class Planning : public PlanningInterface {
 
   common::Status InitFrame(const uint32_t sequence_num,
                            const common::TrajectoryPoint& planning_start_point,
+                           const double start_time,
                            const common::VehicleState& vehicle_state);
 
   bool IsVehicleStateValid(const common::VehicleState& vehicle_state);
+  void ExportReferenceLineDebug(planning_internal::Debug* debug);
+
+  void SetFallbackCruiseTrajectory(ADCTrajectory* cruise_trajectory);
+
+  /**
+   * Reset pull over mode whenever received new routing
+   */
+  void ResetPullOver(const routing::RoutingResponse& response);
+
+  double start_time_ = 0.0;
 
   apollo::common::util::Factory<PlanningConfig::PlannerType, Planner>
       planner_factory_;
 
   PlanningConfig config_;
+
+  TrafficRuleConfigs traffic_rule_configs_;
 
   const hdmap::HDMap* hdmap_ = nullptr;
 
@@ -113,7 +144,11 @@ class Planning : public PlanningInterface {
 
   std::unique_ptr<PublishableTrajectory> last_publishable_trajectory_;
 
+  std::unique_ptr<ReferenceLineProvider> reference_line_provider_;
+
   ros::Timer timer_;
+
+  routing::RoutingResponse last_routing_;
 };
 
 }  // namespace planning

@@ -6,6 +6,7 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const FaviconsWebpackPlugin = require("favicons-webpack-plugin");
 const ProgressBarPlugin = require("progress-bar-webpack-plugin");
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+// const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 
 module.exports = {
     context: path.join(__dirname, "src"),
@@ -17,7 +18,7 @@ module.exports = {
     output: {
         path: path.join(__dirname, "dist_offline"),
         filename: "[name].bundle.js",
-        publicPath: "/",
+        publicPath: "/offlineview/",
     },
 
     devtool: "cheap-source-map",
@@ -39,6 +40,7 @@ module.exports = {
             utils: path.resolve(__dirname, "src/utils"),
             renderer: path.resolve(__dirname, "src/renderer"),
             assets: path.resolve(__dirname, "assets"),
+            proto_bundle: path.resolve(__dirname, "proto_bundle"),
         }
     },
 
@@ -92,7 +94,7 @@ module.exports = {
                 // first, and then file-loader.
                 //
                 // Now you can import images just like js.
-                test: /\.(png|jpe?g|svg|mp4|mov)$/i,
+                test: /\.(png|jpe?g|svg|mp4|mov|gif)$/i,
                 use: [
                     {
                         loader: "file-loader",
@@ -102,10 +104,12 @@ module.exports = {
                     }, {
                         loader: "image-webpack-loader",
                         options: {
-                            progressive: true,
                             pngquant: {
                                 quality: "65-90",
                                 speed: 4,
+                            },
+                            mozjpeg: {
+                                progressive: true,
                             }
                         }
                     }
@@ -144,7 +148,22 @@ module.exports = {
                 // For font-awesome (ttf)
                 test: /\.(ttf|eot|svg)(\?v=[0-9]\.[0-9]\.[0-9])?$/,
                 loader: "file-loader",
-            }
+            }, {
+                test: /webworker\.js$/,
+                use: [
+                {
+                    loader: 'worker-loader',
+                    options: {
+                        name: 'worker.bundle.js'
+                    },
+                },
+                {
+                    loader: "babel-loader",
+                    options: {
+                        presets: ["es2015"],
+                    }
+                }]
+            },
         ]
     },
 
@@ -169,7 +188,7 @@ module.exports = {
         // use the IgnorePlugin to stop any locale being bundled with moment:
         new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/),
 
-        // Configure global constant at "compile" time 
+        // Configure global constant at "compile" time
         // to allow different behavior between offline or realtime
         new webpack.DefinePlugin({
             OFFLINE_PLAYBACK: JSON.stringify(true),
@@ -181,6 +200,7 @@ module.exports = {
         //     sourceMap: true,
         // }),
 
+        // new BundleAnalyzerPlugin(),
     ],
 
     devServer: {

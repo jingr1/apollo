@@ -19,15 +19,17 @@
 #include "modules/common/adapters/adapter_manager.h"
 #include "modules/common/log.h"
 #include "modules/common/util/string_util.h"
-
-DEFINE_string(summary_cleaner_name, "SummaryCleaner",
-              "Name of the summary cleaner.");
+#include "modules/monitor/common/monitor_manager.h"
 
 DEFINE_string(summary_monitor_name, "SummaryMonitor",
               "Name of the summary monitor.");
 
 DEFINE_double(broadcast_max_interval, 8,
               "Max interval of broadcasting runtime status.");
+
+DEFINE_bool(enable_safety_mode, true,
+            "Whether to enable safety mode which may take over the vehicle on "
+            "system failures.");
 
 namespace apollo {
 namespace monitor {
@@ -71,31 +73,21 @@ void SummarizeOnTopicStatus(const TopicStatus &topic_status, Status *status) {
 }  // namespace
 
 // Set interval to 0, so it runs every time when ticking.
-SummaryCleaner::SummaryCleaner()
-    : RecurrentRunner(FLAGS_summary_cleaner_name, 0) {
-}
-
-void SummaryCleaner::RunOnce(const double current_time) {
-  for (auto &module : *MonitorManager::GetStatus()->mutable_modules()) {
-    module.second.set_summary(Summary::UNKNOWN);
-    module.second.clear_msg();
-  }
-  for (auto &hardware : *MonitorManager::GetStatus()->mutable_hardware()) {
-    hardware.second.set_summary(Summary::UNKNOWN);
-    hardware.second.clear_msg();
-  }
-}
-
-// Set interval to 0, so it runs every time when ticking.
 SummaryMonitor::SummaryMonitor()
     : RecurrentRunner(FLAGS_summary_monitor_name, 0) {
   CHECK(AdapterManager::GetSystemStatus())
       << "SystemStatusAdapter is not initialized.";
+  if (FLAGS_enable_safety_mode) {
+    safety_manager_.reset(new SafetyManager());
+  }
 }
 
 void SummaryMonitor::RunOnce(const double current_time) {
   SummarizeModules();
   SummarizeHardware();
+  if (safety_manager_ != nullptr) {
+    safety_manager_->CheckSafety(current_time);
+  }
   // Get fingerprint of current status.
   // Don't use DebugString() which has known bug on Map field. The string
   // doesn't change though the value has changed.
@@ -114,15 +106,23 @@ void SummaryMonitor::RunOnce(const double current_time) {
     system_status_fp_ = new_fp;
     last_broadcast_ = current_time;
   }
+
+  // Print and publish all monitor logs.
+  MonitorManager::LogBuffer().PrintLog();
+  MonitorManager::LogBuffer().Publish();
 }
 
 void SummaryMonitor::SummarizeModules() {
   for (auto &module : *MonitorManager::GetStatus()->mutable_modules()) {
     ModuleStatus *status = &(module.second);
 
-    if (status->has_process_status() && !status->process_status().running()) {
-      UpdateStatusSummary(Summary::FATAL, "No process", status);
-      continue;
+    if (status->has_process_status()) {
+      if (status->process_status().running()) {
+        UpdateStatusSummary(Summary::OK, "", status);
+      } else {
+        UpdateStatusSummary(Summary::FATAL, "No process", status);
+        continue;
+      }
     }
 
     if (status->has_topic_status()) {
@@ -139,16 +139,18 @@ void SummaryMonitor::SummarizeHardware() {
     if (status->has_status()) {
       switch (status->status()) {
         case HardwareStatus::NOT_PRESENT:
-          UpdateStatusSummary(Summary::FATAL, "", status);
+          UpdateStatusSummary(Summary::FATAL, status->detailed_msg(), status);
           break;
-        case HardwareStatus::NOT_READY:
-          UpdateStatusSummary(Summary::WARN, "", status);
+        case HardwareStatus::NOT_READY:  // Fall through.
+        case HardwareStatus::GPS_UNSTABLE_WARNING:
+          UpdateStatusSummary(Summary::WARN, status->detailed_msg(), status);
           break;
         case HardwareStatus::OK:
-          UpdateStatusSummary(Summary::OK, "", status);
+          UpdateStatusSummary(Summary::OK, status->detailed_msg(), status);
           break;
+        case HardwareStatus::GPS_UNSTABLE_ERROR:  // Fall through.
         default:
-          UpdateStatusSummary(Summary::ERROR, "", status);
+          UpdateStatusSummary(Summary::ERROR, status->detailed_msg(), status);
           break;
       }
     }

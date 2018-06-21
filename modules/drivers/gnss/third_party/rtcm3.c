@@ -1,3 +1,38 @@
+/*********************************************************************************
+* The RTKLIB software package is distributed under the following BSD 2-clause
+* license (http://opensource.org/licenses/BSD-2-Clause) and additional two
+* exclusive clauses. Users are permitted to develop, produce or sell their own
+* non-commercial or commercial products utilizing, linking or including RTKLIB as
+* long as they comply with the license.
+* 
+*           Copyright (c) 2007-2013, T. Takasu, All rights reserved.
+* 
+* Redistribution and use in source and binary forms, with or without modification,
+* are permitted provided that the following conditions are met:
+* 
+* - Redistributions of source code must retain the above copyright notice, this
+*   list of conditions and the following disclaimer.
+* 
+* - Redistributions in binary form must reproduce the above copyright notice, this
+*   list of conditions and the following disclaimer in the documentation and/or
+*   other materials provided with the distribution.
+* 
+* - The software package includes some companion executive binaries or shared
+*   libraries necessary to execute APs on Windows. These licenses succeed to the
+*   original ones of these software. 
+* 
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+* GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+* HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
+* THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+***********************************************************************************/
+
 /*------------------------------------------------------------------------------
 * rtcm3.c : rtcm ver.3 message decorder functions
 *
@@ -24,6 +59,13 @@
 *           2014/12/06 1.8  support SBAS/BeiDou SSR messages (ref [16])
 *           2015/03/22 1.9  add handling of iodcrc for beidou/sbas ssr messages
 *-----------------------------------------------------------------------------*/
+
+/**
+* file: rtcm3.c
+* version: rtklib ver.2.4.2
+* Copy from https://github.com/tomojitakasu/RTKLIB/tree/76b9c97257f304aedad38b5a6bbbac444724aab3/src/rtcm3.c
+*/
+
 #include "rtklib.h"
 
 static const char rcsid[]="$Id:$";
@@ -1355,10 +1397,10 @@ static int decode_ssr3(rtcm_t *rtcm, int sys)
     switch (sys) {
         case SYS_GPS: np=6; offp=  0; codes=codes_gps; ncode=16; break;
         case SYS_GLO: np=5; offp=  0; codes=codes_glo; ncode= 3; break;
-        case SYS_GAL: np=6; offp=  0; codes=codes_gal; ncode=19; break;
+        case SYS_GAL: np=6; offp=  0; codes=codes_gal; ncode=18; break;
         case SYS_QZS: np=4; offp=192; codes=codes_qzs; ncode=12; break;
-        case SYS_CMP: np=6; offp=  1; codes=codes_bds; ncode= 9; break;
-        case SYS_SBS: np=6; offp=120; codes=codes_sbs; ncode= 4; break;
+        case SYS_CMP: np=6; offp=  1; codes=codes_bds; ncode= 8; break;
+        case SYS_SBS: np=6; offp=120; codes=codes_sbs; ncode= 3; break;
         default: return sync?0:10;
     }
     for (j=0;j<nsat&&i+5+np<=rtcm->len*8;j++) {

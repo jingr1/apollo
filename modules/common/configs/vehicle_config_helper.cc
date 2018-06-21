@@ -14,8 +14,12 @@
  * limitations under the License.
  *****************************************************************************/
 
-#include "modules/common/configs/config_gflags.h"
 #include "modules/common/configs/vehicle_config_helper.h"
+
+#include <algorithm>
+#include <cmath>
+
+#include "modules/common/configs/config_gflags.h"
 #include "modules/common/util/file.h"
 
 namespace apollo {
@@ -31,7 +35,7 @@ void VehicleConfigHelper::Init() { Init(FLAGS_vehicle_config_path); }
 void VehicleConfigHelper::Init(const std::string &config_file) {
   VehicleConfig params;
   CHECK(apollo::common::util::GetProtoFromFile(config_file, &params))
-      << "Unable to parse adapter config file " << config_file;
+      << "Unable to parse vehicle config file " << config_file;
   Init(params);
 }
 
@@ -45,6 +49,17 @@ const VehicleConfig &VehicleConfigHelper::GetConfig() {
     Init();
   }
   return vehicle_config_;
+}
+
+double VehicleConfigHelper::MinSafeTurnRadius() {
+  const auto &param = vehicle_config_.vehicle_param();
+  double lat_edge_to_center =
+      std::max(param.left_edge_to_center(), param.right_edge_to_center());
+  double lon_edge_to_center =
+      std::max(param.front_edge_to_center(), param.back_edge_to_center());
+  return std::sqrt((lat_edge_to_center + param.min_turn_radius()) *
+                       (lat_edge_to_center + param.min_turn_radius()) +
+                   lon_edge_to_center * lon_edge_to_center);
 }
 
 }  // namespace common

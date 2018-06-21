@@ -32,13 +32,14 @@
 #include "modules/canbus/vehicle/vehicle_controller.h"
 #include "modules/common/apollo_app.h"
 #include "modules/common/macro.h"
-#include "modules/common/monitor/monitor.h"
+#include "modules/common/monitor_log/monitor_log_buffer.h"
 #include "modules/control/proto/control_cmd.pb.h"
 #include "modules/drivers/canbus/can_client/can_client.h"
 #include "modules/drivers/canbus/can_comm/can_receiver.h"
 #include "modules/drivers/canbus/can_comm/can_sender.h"
 #include "modules/drivers/canbus/can_comm/message_manager.h"
 #include "modules/drivers/canbus/proto/can_card_parameter.pb.h"
+#include "modules/guardian/proto/guardian.pb.h"
 
 /**
  * @namespace apollo::canbus
@@ -47,40 +48,38 @@
 namespace apollo {
 namespace canbus {
 
-using ::apollo::drivers::canbus::CanClient;
-using ::apollo::drivers::canbus::CanReceiver;
-
 /**
-* @class Canbus
-*
-* @brief canbus module main class.
-* It processes the control data to send protocol messages to can card.
-*/
+ * @class Canbus
+ *
+ * @brief canbus module main class.
+ * It processes the control data to send protocol messages to can card.
+ */
 class Canbus : public apollo::common::ApolloApp {
  public:
-  Canbus() : monitor_(apollo::common::monitor::MonitorMessageItem::CANBUS) {}
+  Canbus()
+      : monitor_logger_(apollo::common::monitor::MonitorMessageItem::CANBUS) {}
 
   /**
-  * @brief obtain module name
-  * @return module name
-  */
+   * @brief obtain module name
+   * @return module name
+   */
   std::string Name() const override;
 
   /**
-  * @brief module initialization function
-  * @return initialization status
-  */
+   * @brief module initialization function
+   * @return initialization status
+   */
   apollo::common::Status Init() override;
 
   /**
-  * @brief module start function
-  * @return start status
-  */
+   * @brief module start function
+   * @return start status
+   */
   apollo::common::Status Start() override;
 
   /**
-  * @brief module stop function
-  */
+   * @brief module stop function
+   */
   void Stop() override;
 
  private:
@@ -88,20 +87,22 @@ class Canbus : public apollo::common::ApolloApp {
   void PublishChassisDetail();
   void OnTimer(const ros::TimerEvent &event);
   void OnControlCommand(const apollo::control::ControlCommand &control_command);
+  void OnGuardianCommand(
+      const apollo::guardian::GuardianCommand &guardian_command);
   apollo::common::Status OnError(const std::string &error_msg);
   void RegisterCanClients();
 
   CanbusConf canbus_conf_;
-  std::unique_ptr<CanClient> can_client_;
-  CanSender<::apollo::canbus::ChassisDetail> can_sender_;
-  CanReceiver<::apollo::canbus::ChassisDetail> can_receiver_;
+  std::unique_ptr<apollo::drivers::canbus::CanClient> can_client_;
+  CanSender<ChassisDetail> can_sender_;
+  apollo::drivers::canbus::CanReceiver<ChassisDetail> can_receiver_;
   std::unique_ptr<MessageManager<::apollo::canbus::ChassisDetail>>
       message_manager_;
   std::unique_ptr<VehicleController> vehicle_controller_;
 
   int64_t last_timestamp_ = 0;
   ros::Timer timer_;
-  apollo::common::monitor::Monitor monitor_;
+  apollo::common::monitor::MonitorLogger monitor_logger_;
 };
 
 }  // namespace canbus

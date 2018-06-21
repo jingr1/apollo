@@ -2,109 +2,65 @@ import React from "react";
 import { observer } from "mobx-react";
 import classNames from "classnames";
 
+import TasksIcon from "assets/images/sidebar/tasks.png";
+import ModuleControllerIcon from "assets/images/sidebar/module_controller.png";
+import LayerMenuIcon from "assets/images/sidebar/layer_menu.png";
+import RouteEditingIcon from "assets/images/sidebar/route_editing.png";
+import DataRecorderIcon from "assets/images/sidebar/data_recorder.png";
 
-class SideBarButton extends React.Component {
+class SideBarButton extends React.PureComponent {
     render() {
-        const { disabled, onClick, active, label, extraClasses } = this.props;
+        const { disabled, onClick, active, label, extraClasses, iconSrc } = this.props;
         return (
             <button onClick={onClick}
                     disabled={disabled}
                     className={classNames({
                             "button": true,
-                            "active": active,
+                            "button-active": active,
                         }, extraClasses)}>
-                {label}
+                <img src={iconSrc} className="icon" />
+                <div className="label">{label}</div>
             </button>
         );
     }
 }
 
-class DashCamButton extends React.Component {
-    constructor(props) {
-      super(props);
-      this.onClickHandler = this.onClickHandler.bind(this);
-    }
-
-    onClickHandler() {
-      this.fileInput.value = null;
-      this.fileInput.click();
-    }
-
+export default class ButtonPanel extends React.PureComponent {
     render() {
-        const { disabled, onClick, video } = this.props;
-
-        return (
-          <div>
-            <input  style={{display: "none"}}
-                    ref={(input) => {
-                        this.fileInput = input;
-                    }}
-                    type="file"
-                    accept="video/*"
-                    onChange={onClick}/>
-            <button onClick={this.onClickHandler}
-                    disabled={disabled}
-                    className="button">
-                DashCam Video
-            </button>
-          </div>
-        );
-    }
-}
-
-
-export default class ButtonPanel extends React.Component {
-    render() {
-        const { enableHMIButtonsOnly,
-                onQuickStarter, showQuickStarter,
+        const { enableHMIButtonsOnly, inNavigationMode,
+                onTasks, showTasks,
                 onModuleController, showModuleController,
                 onMenu, showMenu,
                 onRouteEditingBar, showRouteEditingBar,
-                onPOI, showPOI,
-                onPNCMonitor, showPNCMonitor,
-                onConsole, showConsole,
-                resetBackend, dumpMessages, onVideo} = this.props;
+                onDataRecorder, showDataRecorder } = this.props;
 
         return (
-            <div>
-                <SideBarButton label="Quick Start"
+            <div className="main-panel">
+                <SideBarButton label="Tasks"
                                disabled={false}
-                               onClick={onQuickStarter}
-                               active={showQuickStarter}/>
+                               iconSrc={TasksIcon}
+                               onClick={onTasks}
+                               active={showTasks}/>
                 <SideBarButton label="Module Controller"
                                disabled={false}
+                               iconSrc={ModuleControllerIcon}
                                onClick={onModuleController}
                                active={showModuleController}/>
                 <SideBarButton label="Layer Menu"
                                disabled={enableHMIButtonsOnly}
+                               iconSrc={LayerMenuIcon}
                                onClick={onMenu}
                                active={showMenu} />
                 <SideBarButton label="Route Editing"
-                               disabled={enableHMIButtonsOnly}
+                               disabled={enableHMIButtonsOnly || inNavigationMode}
+                               iconSrc={RouteEditingIcon}
                                onClick={onRouteEditingBar}
                                active={showRouteEditingBar} />
-                <SideBarButton label="Default Routing"
+                <SideBarButton label="Data Recorder"
                                disabled={enableHMIButtonsOnly}
-                               onClick={onPOI}
-                               active={showPOI} />
-                <SideBarButton label="PNC Monitor"
-                               disabled={enableHMIButtonsOnly}
-                               onClick={onPNCMonitor}
-                               active={showPNCMonitor} />
-                <SideBarButton label="Notifications"
-                               disabled={enableHMIButtonsOnly}
-                               onClick={onConsole}
-                               active={showConsole} />
-                <SideBarButton label="Reset Backend Data"
-                               disabled={enableHMIButtonsOnly}
-                               onClick={resetBackend}
-                               active={false} />
-                <SideBarButton label="Dump Messages"
-                               disabled={enableHMIButtonsOnly}
-                               onClick={dumpMessages}
-                               active={false} />
-                <DashCamButton disabled={enableHMIButtonsOnly}
-                               onClick={onVideo}/>
+                               iconSrc={DataRecorderIcon}
+                               onClick={onDataRecorder}
+                               active={showDataRecorder} />
             </div>
         );
     }

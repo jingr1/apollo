@@ -8,7 +8,9 @@ cc_library(
     hdrs = ["process_monitor.h"],
     deps = [
         "//external:gflags",
-        "//modules/monitor/common:monitor_interface",
+        "//modules/common/util:string_util",
+        "//modules/monitor/common:monitor_manager",
+        "//modules/monitor/common:recurrent_runner",
     ],
 )
 
@@ -19,7 +21,21 @@ cc_library(
     deps = [
         "//modules/common/adapters:adapter_manager",
         "//modules/common/util:string_util",
-        "//modules/monitor/common:monitor_interface",
+        "//modules/monitor/common:monitor_manager",
+        "//modules/monitor/common:recurrent_runner",
+    ],
+)
+
+cc_library(
+    name = "safety_manager",
+    srcs = ["safety_manager.cc"],
+    hdrs = ["safety_manager.h"],
+    deps = [
+        "//modules/common/adapters:adapter_manager",
+        "//modules/common/kv_db",
+        "//modules/dreamview/backend/common:dreamview_gflags",
+        "//modules/dreamview/proto:hmi_config_proto",
+        "//modules/monitor/common:monitor_manager",
     ],
 )
 
@@ -28,9 +44,11 @@ cc_library(
     srcs = ["summary_monitor.cc"],
     hdrs = ["summary_monitor.h"],
     deps = [
+        ":safety_manager",
         "//modules/common/adapters:adapter_manager",
         "//modules/common/util:string_util",
-        "//modules/monitor/common:monitor_interface",
+        "//modules/monitor/common:monitor_manager",
+        "//modules/monitor/common:recurrent_runner",
     ],
 )
 

@@ -3,10 +3,10 @@ import { inject, observer } from "mobx-react";
 
 import EditingTip from "components/RouteEditingBar/EditingTip";
 
-import removeAllIcon from "assets/images/icons/remove_all.png";
-import removeLastIcon from "assets/images/icons/remove_last.png";
-import sendRouteIcon from "assets/images/icons/send_request.png";
-import addPoiIcon from "assets/images/icons/add_poi.png";
+import removeAllIcon from "assets/images/routing/remove_all.png";
+import removeLastIcon from "assets/images/routing/remove_last.png";
+import sendRouteIcon from "assets/images/routing/send_request.png";
+import addPoiIcon from "assets/images/routing/add_poi.png";
 
 
 class RouteEditingButton extends React.Component {
@@ -33,7 +33,7 @@ export default class RouteEditingMenu extends React.Component {
                     <RouteEditingButton label="Add Point of Interest"
                                         icon={addPoiIcon}
                                         onClick={() => {
-                                            this.props.store.handleSideBarClick('showPOI');
+                                            this.props.store.handleOptionToggle('showPOI');
                                         }}/>
                     <RouteEditingButton label="Remove Last Point"
                                         icon={removeLastIcon}
@@ -48,7 +48,7 @@ export default class RouteEditingMenu extends React.Component {
                     <RouteEditingButton label="Send Routing Request"
                                       icon={sendRouteIcon}
                                       onClick={() => {
-                                          if (routeEditingManager.sendRoutingRequest()) {
+                                          if (routeEditingManager.sendRoutingRequest(false)) {
                                               options.showRouteEditingBar = false;
                                           }
                                         }}/>

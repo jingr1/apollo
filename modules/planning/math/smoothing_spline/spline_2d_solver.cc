@@ -111,9 +111,12 @@ bool Spline2dSolver::Solve() {
   // definition of qpOASESproblem
   const int kNumOfMatrixElements = kernel_matrix.rows() * kernel_matrix.cols();
   double h_matrix[kNumOfMatrixElements];  // NOLINT
+  memset(h_matrix, 0, sizeof h_matrix);
 
   const int kNumOfOffsetRows = offset.rows();
   double g_matrix[kNumOfOffsetRows];  // NOLINT
+  memset(g_matrix, 0, sizeof g_matrix);
+
   int index = 0;
 
   for (int r = 0; r < kernel_matrix.rows(); ++r) {
@@ -127,6 +130,8 @@ bool Spline2dSolver::Solve() {
   // search space lower bound and uppper bound
   double lower_bound[num_param];  // NOLINT
   double upper_bound[num_param];  // NOLINT
+  memset(lower_bound, 0, sizeof lower_bound);
+  memset(upper_bound, 0, sizeof upper_bound);
 
   const double l_lower_bound_ = -kRoadBound;
   const double l_upper_bound_ = kRoadBound;
@@ -138,8 +143,12 @@ bool Spline2dSolver::Solve() {
 
   // constraint matrix construction
   double affine_constraint_matrix[num_param * num_constraint];  // NOLINT
-  double constraint_lower_bound[num_constraint];                // NOLINT
-  double constraint_upper_bound[num_constraint];                // NOLINT
+  memset(affine_constraint_matrix, 0, sizeof affine_constraint_matrix);
+
+  double constraint_lower_bound[num_constraint];  // NOLINT
+  double constraint_upper_bound[num_constraint];  // NOLINT
+  memset(constraint_lower_bound, 0, sizeof constraint_lower_bound);
+  memset(constraint_upper_bound, 0, sizeof constraint_upper_bound);
 
   index = 0;
   for (int r = 0; r < equality_constraint_matrix.rows(); ++r) {
@@ -168,11 +177,10 @@ bool Spline2dSolver::Solve() {
                        inequality_constraint_boundary.rows() * num_param);
 
   // initialize problem
-  int max_iteration_ = 1000;
-  int max_iter = std::max(max_iteration_, num_constraint);
+  int max_iter = std::max(FLAGS_default_qp_iteration_num, num_constraint);
 
   ::qpOASES::returnValue ret;
-  const double start_timestamp = Clock::NowInSecond();
+  const double start_timestamp = Clock::NowInSeconds();
   if (use_hotstart) {
     ADEBUG << "Spline2dSolver is using SQP hotstart.";
     ret = sqp_solver_->hotstart(
@@ -190,7 +198,7 @@ bool Spline2dSolver::Solve() {
                             lower_bound, upper_bound, constraint_lower_bound,
                             constraint_upper_bound, max_iter);
   }
-  const double end_timestamp = Clock::NowInSecond();
+  const double end_timestamp = Clock::NowInSeconds();
   ADEBUG << "Spline2dSolver QP time: "
          << (end_timestamp - start_timestamp) * 1000 << " ms.";
 

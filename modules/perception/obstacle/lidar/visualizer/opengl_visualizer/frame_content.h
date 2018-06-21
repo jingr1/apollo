@@ -19,12 +19,13 @@
 
 #include <deque>
 #include <iomanip>
-#include <string>
+#include <memory>
 #include <sstream>
-#include <vector>
+#include <string>
 #include <thread>
+#include <vector>
 
-#include "modules/perception/lib/pcl_util/pcl_types.h"
+#include "modules/perception/common/pcl_types.h"
 #include "modules/perception/obstacle/base/object.h"
 
 namespace apollo {
@@ -45,17 +46,17 @@ class FrameContent {
 
   bool HasCloud();
 
-  void SetTrackedObjects(const std::vector<ObjectPtr> &objects);
-
-  std::vector<ObjectPtr> GetTrackedObjects();
+  void SetTrackedObjects(const std::vector<std::shared_ptr<Object>> &objects);
+  std::vector<std::shared_ptr<Object>> GetTrackedObjects();
 
  protected:
   // coordinate transform utilities
-  void OffsetPointcloud(pcl_util::PointCloud* cloud,
+  void OffsetPointcloud(pcl_util::PointCloud *cloud,
                         const Eigen::Vector3d &offset);
-  void OffsetPointcloud(pcl_util::PointDCloud* cloud,
+  void OffsetPointcloud(pcl_util::PointDCloud *cloud,
                         const Eigen::Vector3d &offset);
-  void OffsetObject(ObjectPtr object, const Eigen::Vector3d &offset);
+  void OffsetObject(std::shared_ptr<Object> object,
+                    const Eigen::Vector3d &offset);
 
  private:
   // input
@@ -66,7 +67,7 @@ class FrameContent {
 
   Eigen::Vector3d global_offset_;
   bool global_offset_initialized_;
-  std::vector<ObjectPtr> tracked_objects_lidar_;  // after tracking
+  std::vector<std::shared_ptr<Object>> tracked_objects_;  // after tracking
 };
 
 }  // namespace perception

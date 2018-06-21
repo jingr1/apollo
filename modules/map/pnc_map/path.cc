@@ -27,23 +27,26 @@
 #include "modules/common/math/vec2d.h"
 #include "modules/common/util/string_util.h"
 
+// https://nacto.org/publication/urban-street-design-guide/street-design-elements/lane-width/
+DEFINE_double(default_lane_width, 3.048, "default lane width is about 10 feet");
+
 namespace apollo {
 namespace hdmap {
 
-using common::math::LineSegment2d;
-using common::math::Polygon2d;
-using common::math::Vec2d;
 using common::math::Box2d;
 using common::math::kMathEpsilon;
+using common::math::LineSegment2d;
+using common::math::Polygon2d;
 using common::math::Sqr;
+using common::math::Vec2d;
 using std::placeholders::_1;
 
 namespace {
 
 const double kSampleDistance = 0.25;
 
-bool find_lane_segment(const MapPathPoint& p1, const MapPathPoint& p2,
-                       LaneSegment* const lane_segment) {
+bool FindLaneSegment(const MapPathPoint& p1, const MapPathPoint& p2,
+                     LaneSegment* const lane_segment) {
   for (const auto& wp1 : p1.lane_waypoints()) {
     for (const auto& wp2 : p2.lane_waypoints()) {
       if (wp1.lane->id().id() == wp2.lane->id().id() && wp1.s < wp2.s) {
@@ -62,6 +65,122 @@ std::string LaneWaypoint::DebugString() const {
     return "(lane is null)";
   }
   return common::util::StrCat("id = ", lane->id().id(), "  s = ", s);
+}
+
+LaneBoundaryType::Type LeftBoundaryType(const LaneWaypoint& waypoint) {
+  if (!waypoint.lane) {
+    return LaneBoundaryType::UNKNOWN;
+  }
+  for (const auto& type :
+       waypoint.lane->lane().left_boundary().boundary_type()) {
+    if (type.s() <= waypoint.s) {
+      if (type.types_size() > 0) {
+        return type.types(0);
+      } else {
+        return LaneBoundaryType::UNKNOWN;
+      }
+    }
+  }
+  return LaneBoundaryType::UNKNOWN;
+}
+
+LaneBoundaryType::Type RightBoundaryType(const LaneWaypoint& waypoint) {
+  if (!waypoint.lane) {
+    return LaneBoundaryType::UNKNOWN;
+  }
+  for (const auto& type :
+       waypoint.lane->lane().right_boundary().boundary_type()) {
+    if (type.s() <= waypoint.s) {
+      if (type.types_size() > 0) {
+        return type.types(0);
+      } else {
+        return LaneBoundaryType::UNKNOWN;
+      }
+    }
+  }
+  return LaneBoundaryType::UNKNOWN;
+}
+
+LaneWaypoint LeftNeighborWaypoint(const LaneWaypoint& waypoint) {
+  LaneWaypoint neighbor;
+  if (!waypoint.lane) {
+    return neighbor;
+  }
+  auto point = waypoint.lane->GetSmoothPoint(waypoint.s);
+  auto map_ptr = HDMapUtil::BaseMapPtr();
+  for (const auto& lane_id :
+       waypoint.lane->lane().left_neighbor_forward_lane_id()) {
+    auto lane = map_ptr->GetLaneById(lane_id);
+    if (!lane) {
+      return neighbor;
+    }
+    double s = 0.0;
+    double l = 0.0;
+    if (!lane->GetProjection({point.x(), point.y()}, &s, &l)) {
+      continue;
+    }
+
+    if (s < -kSampleDistance || s > lane->total_length() + kSampleDistance) {
+      continue;
+    } else {
+      return LaneWaypoint(lane, s);
+    }
+  }
+  return neighbor;
+}
+
+void LaneSegment::Join(std::vector<LaneSegment>* segments) {
+  constexpr double kSegmentDelta = 0.5;
+  std::size_t k = 0;
+  std::size_t i = 0;
+  while (i < segments->size()) {
+    std::size_t j = i;
+    while (j + 1 < segments->size() &&
+           segments->at(i).lane == segments->at(j + 1).lane) {
+      ++j;
+    }
+    auto& segment_k = segments->at(k);
+    segment_k.lane = segments->at(i).lane;
+    segment_k.start_s = segments->at(i).start_s;
+    segment_k.end_s = segments->at(j).end_s;
+    if (segment_k.start_s < kSegmentDelta) {
+      segment_k.start_s = 0.0;
+    }
+    if (segment_k.end_s + kSegmentDelta >= segment_k.lane->total_length()) {
+      segment_k.end_s = segment_k.lane->total_length();
+    }
+    i = j + 1;
+    ++k;
+  }
+  segments->resize(k);
+  segments->shrink_to_fit();  // release memory
+}
+
+LaneWaypoint RightNeighborWaypoint(const LaneWaypoint& waypoint) {
+  LaneWaypoint neighbor;
+  if (!waypoint.lane) {
+    return neighbor;
+  }
+  auto point = waypoint.lane->GetSmoothPoint(waypoint.s);
+  auto map_ptr = HDMapUtil::BaseMapPtr();
+  for (const auto& lane_id :
+       waypoint.lane->lane().right_neighbor_forward_lane_id()) {
+    auto lane = map_ptr->GetLaneById(lane_id);
+    if (!lane) {
+      return neighbor;
+    }
+    double s = 0.0;
+    double l = 0.0;
+    if (!lane->GetProjection({point.x(), point.y()}, &s, &l)) {
+      continue;
+    }
+    if (s < -kSampleDistance || s > lane->total_length() + kSampleDistance) {
+      continue;
+    } else {
+      return LaneWaypoint(lane, s);
+    }
+  }
+  return neighbor;
 }
 
 std::string LaneSegment::DebugString() const {
@@ -103,20 +222,42 @@ std::string PathOverlap::DebugString() const {
   return common::util::StrCat(object_id, " ", start_s, " ", end_s);
 }
 
-Path::Path(std::vector<MapPathPoint> path_points)
+Path::Path(const std::vector<MapPathPoint>& path_points)
+    : path_points_(path_points) {
+  Init();
+}
+
+Path::Path(std::vector<MapPathPoint>&& path_points)
     : path_points_(std::move(path_points)) {
   Init();
 }
 
-Path::Path(std::vector<MapPathPoint> path_points,
-           std::vector<LaneSegment> lane_segments)
+Path::Path(const std::vector<MapPathPoint>& path_points,
+           const std::vector<LaneSegment>& lane_segments)
+    : path_points_(path_points), lane_segments_(lane_segments) {
+  Init();
+}
+
+Path::Path(std::vector<MapPathPoint>&& path_points,
+           std::vector<LaneSegment>&& lane_segments)
     : path_points_(std::move(path_points)),
       lane_segments_(std::move(lane_segments)) {
   Init();
 }
 
-Path::Path(std::vector<MapPathPoint> path_points,
-           std::vector<LaneSegment> lane_segments,
+Path::Path(const std::vector<MapPathPoint>& path_points,
+           const std::vector<LaneSegment>& lane_segments,
+           const double max_approximation_error)
+    : path_points_(path_points), lane_segments_(lane_segments) {
+  Init();
+  if (max_approximation_error > 0.0) {
+    use_path_approximation_ = true;
+    approximation_ = PathApproximation(*this, max_approximation_error);
+  }
+}
+
+Path::Path(std::vector<MapPathPoint>&& path_points,
+           std::vector<LaneSegment>&& lane_segments,
            const double max_approximation_error)
     : path_points_(std::move(path_points)),
       lane_segments_(std::move(lane_segments)) {
@@ -173,22 +314,21 @@ void Path::InitPoints() {
 
 void Path::InitLaneSegments() {
   if (lane_segments_.empty()) {
-    lane_segments_.reserve(num_points_);
     for (int i = 0; i + 1 < num_points_; ++i) {
       LaneSegment lane_segment;
-      if (find_lane_segment(path_points_[i], path_points_[i + 1],
-                            &lane_segment)) {
+      if (FindLaneSegment(path_points_[i], path_points_[i + 1],
+                          &lane_segment)) {
         lane_segments_.push_back(lane_segment);
       }
     }
   }
+  LaneSegment::Join(&lane_segments_);
 
   lane_segments_to_next_point_.clear();
   lane_segments_to_next_point_.reserve(num_points_);
   for (int i = 0; i + 1 < num_points_; ++i) {
     LaneSegment lane_segment;
-    if (find_lane_segment(path_points_[i], path_points_[i + 1],
-                          &lane_segment)) {
+    if (FindLaneSegment(path_points_[i], path_points_[i + 1], &lane_segment)) {
       lane_segments_to_next_point_.push_back(lane_segment);
     } else {
       lane_segments_to_next_point_.push_back(LaneSegment());
@@ -198,31 +338,50 @@ void Path::InitLaneSegments() {
 }
 
 void Path::InitWidth() {
-  left_width_.clear();
-  left_width_.reserve(num_sample_points_);
-  right_width_.clear();
-  right_width_.reserve(num_sample_points_);
+  lane_left_width_.clear();
+  lane_left_width_.reserve(num_sample_points_);
+  lane_right_width_.clear();
+  lane_right_width_.reserve(num_sample_points_);
+
+  road_left_width_.clear();
+  road_left_width_.reserve(num_sample_points_);
+  road_right_width_.clear();
+  road_right_width_.reserve(num_sample_points_);
 
   double s = 0;
   for (int i = 0; i < num_sample_points_; ++i) {
     const MapPathPoint point = GetSmoothPoint(s);
     if (point.lane_waypoints().empty()) {
-      left_width_.push_back(0.0);
-      right_width_.push_back(0.0);
-      AERROR << "path point:" << point.DebugString() << " has invalid width.";
+      lane_left_width_.push_back(FLAGS_default_lane_width / 2.0);
+      lane_right_width_.push_back(FLAGS_default_lane_width / 2.0);
+
+      road_left_width_.push_back(FLAGS_default_lane_width / 2.0);
+      road_right_width_.push_back(FLAGS_default_lane_width / 2.0);
+      AWARN << "path point:" << point.DebugString() << " has invalid width.";
     } else {
       const LaneWaypoint waypoint = point.lane_waypoints()[0];
       CHECK_NOTNULL(waypoint.lane);
-      double left_width = 0.0;
-      double right_width = 0.0;
-      waypoint.lane->GetWidth(waypoint.s, &left_width, &right_width);
-      left_width_.push_back(left_width);
-      right_width_.push_back(right_width);
+
+      double lane_left_width = 0.0;
+      double lane_right_width = 0.0;
+      waypoint.lane->GetWidth(waypoint.s, &lane_left_width, &lane_right_width);
+      lane_left_width_.push_back(lane_left_width - waypoint.l);
+      lane_right_width_.push_back(lane_right_width + waypoint.l);
+
+      double road_left_width = 0.0;
+      double road_right_width = 0.0;
+      waypoint.lane->GetRoadWidth(waypoint.s, &road_left_width,
+                                  &road_right_width);
+      road_left_width_.push_back(road_left_width - waypoint.l);
+      road_right_width_.push_back(road_right_width + waypoint.l);
     }
     s += kSampleDistance;
   }
-  CHECK_EQ(left_width_.size(), num_sample_points_);
-  CHECK_EQ(right_width_.size(), num_sample_points_);
+  CHECK_EQ(lane_left_width_.size(), num_sample_points_);
+  CHECK_EQ(lane_right_width_.size(), num_sample_points_);
+
+  CHECK_EQ(road_left_width_.size(), num_sample_points_);
+  CHECK_EQ(road_right_width_.size(), num_sample_points_);
 }
 
 void Path::InitPointIndex() {
@@ -241,7 +400,7 @@ void Path::InitPointIndex() {
   CHECK_EQ(last_point_index_.size(), num_sample_points_);
 }
 
-void Path::GetAllOverlaps(GetOverlapFromLaneFunc get_overlaps_from_lane,
+void Path::GetAllOverlaps(GetOverlapFromLaneFunc GetOverlaps_from_lane,
                           std::vector<PathOverlap>* const overlaps) const {
   if (overlaps == nullptr) {
     return;
@@ -254,9 +413,9 @@ void Path::GetAllOverlaps(GetOverlapFromLaneFunc get_overlaps_from_lane,
     if (lane_segment.lane == nullptr) {
       continue;
     }
-    for (const auto& overlap : get_overlaps_from_lane(*(lane_segment.lane))) {
+    for (const auto& overlap : GetOverlaps_from_lane(*(lane_segment.lane))) {
       const auto& overlap_info =
-          overlap->get_object_overlap_info(lane_segment.lane->id());
+          overlap->GetObjectOverlapInfo(lane_segment.lane->id());
       if (overlap_info == nullptr) {
         continue;
       }
@@ -301,6 +460,17 @@ void Path::GetAllOverlaps(GetOverlapFromLaneFunc get_overlaps_from_lane,
             });
 }
 
+const PathOverlap* Path::NextLaneOverlap(double s) const {
+  auto next = std::upper_bound(
+      lane_overlaps_.begin(), lane_overlaps_.end(), s,
+      [](double s, const PathOverlap& o) { return s < o.start_s; });
+  if (next == lane_overlaps_.end()) {
+    return nullptr;
+  } else {
+    return &(*next);
+  }
+}
+
 void Path::InitOverlaps() {
   GetAllOverlaps(std::bind(&LaneInfo::cross_lanes, _1), &lane_overlaps_);
   GetAllOverlaps(std::bind(&LaneInfo::signals, _1), &signal_overlaps_);
@@ -327,11 +497,19 @@ MapPathPoint Path::GetSmoothPoint(const InterpolatedIndex& index) const {
     const Vec2d delta = unit_directions_[index.id] * index.offset;
     MapPathPoint point({ref_point.x() + delta.x(), ref_point.y() + delta.y()},
                        ref_point.heading());
-    if (index.id < num_segments_) {
+    if (index.id < num_segments_ && !ref_point.lane_waypoints().empty()) {
       const LaneSegment& lane_segment = lane_segments_to_next_point_[index.id];
+      auto ref_lane_waypoint = ref_point.lane_waypoints()[0];
       if (lane_segment.lane != nullptr) {
-        point.add_lane_waypoint(LaneWaypoint(
-            lane_segment.lane, lane_segment.start_s + index.offset));
+        for (const auto& lane_waypoint : ref_point.lane_waypoints()) {
+          if (lane_waypoint.lane->id().id() == lane_segment.lane->id().id()) {
+            ref_lane_waypoint = lane_waypoint;
+            break;
+          }
+        }
+        point.add_lane_waypoint(
+            LaneWaypoint(lane_segment.lane, lane_segment.start_s + index.offset,
+                         ref_lane_waypoint.l));
       }
     }
     if (point.lane_waypoints().empty() && !ref_point.lane_waypoints().empty()) {
@@ -412,6 +590,58 @@ bool Path::GetProjection(const common::math::Vec2d& point, double* accumulate_s,
   return GetProjection(point, accumulate_s, lateral, &distance);
 }
 
+bool Path::GetProjectionWithHueristicParams(const Vec2d& point,
+                                            const double hueristic_start_s,
+                                            const double hueristic_end_s,
+                                            double* accumulate_s,
+                                            double* lateral,
+                                            double* min_distance) const {
+  if (segments_.empty()) {
+    return false;
+  }
+  if (accumulate_s == nullptr || lateral == nullptr ||
+      min_distance == nullptr) {
+    return false;
+  }
+  CHECK_GE(num_points_, 2);
+  *min_distance = std::numeric_limits<double>::infinity();
+
+  int start_interpolation_index = GetIndexFromS(hueristic_start_s).id;
+  int end_interpolation_index =
+      std::fmin(num_segments_, GetIndexFromS(hueristic_end_s).id + 1);
+  for (int i = start_interpolation_index; i < end_interpolation_index; ++i) {
+    const auto& segment = segments_[i];
+    const double distance = segment.DistanceTo(point);
+    if (distance < *min_distance) {
+      const double proj = segment.ProjectOntoUnit(point);
+      if (proj < 0.0 && i > 0) {
+        continue;
+      }
+      if (proj > segment.length() && i + 1 < end_interpolation_index) {
+        const auto& next_segment = segments_[i + 1];
+        if ((point - next_segment.start())
+                .InnerProd(next_segment.unit_direction()) >= 0.0) {
+          continue;
+        }
+      }
+      *min_distance = distance;
+      if (i + 1 >= end_interpolation_index) {
+        *accumulate_s = accumulated_s_[i] + proj;
+      } else {
+        *accumulate_s = accumulated_s_[i] + std::min(proj, segment.length());
+      }
+      const double prod = segment.ProductOntoUnit(point);
+      if ((i == 0 && proj < 0.0) ||
+          (i + 1 == end_interpolation_index && proj > segment.length())) {
+        *lateral = prod;
+      } else {
+        *lateral = (prod > 0.0 ? distance : -distance);
+      }
+    }
+  }
+  return true;
+}
+
 bool Path::GetProjection(const Vec2d& point, double* accumulate_s,
                          double* lateral, double* min_distance) const {
   if (segments_.empty()) {
@@ -474,24 +704,46 @@ bool Path::GetHeadingAlongPath(const Vec2d& point, double* heading) const {
   return false;
 }
 
-double Path::GetLeftWidth(const double s) const {
-  return GetSample(left_width_, s);
+double Path::GetLaneLeftWidth(const double s) const {
+  return GetSample(lane_left_width_, s);
 }
 
-double Path::GetRightWidth(const double s) const {
-  return GetSample(right_width_, s);
+double Path::GetLaneRightWidth(const double s) const {
+  return GetSample(lane_right_width_, s);
 }
 
-bool Path::GetWidth(const double s, double* left_width,
-                    double* right_width) const {
-  CHECK_NOTNULL(left_width);
-  CHECK_NOTNULL(right_width);
+bool Path::GetLaneWidth(const double s, double* lane_left_width,
+                        double* lane_right_width) const {
+  CHECK_NOTNULL(lane_left_width);
+  CHECK_NOTNULL(lane_right_width);
 
   if (s < 0.0 || s > length_) {
     return false;
   }
-  *left_width = GetSample(left_width_, s);
-  *right_width = GetSample(right_width_, s);
+  *lane_left_width = GetSample(lane_left_width_, s);
+  *lane_right_width = GetSample(lane_right_width_, s);
+  return true;
+}
+
+double Path::GetRoadLeftWidth(const double s) const {
+  return GetSample(road_left_width_, s);
+}
+
+double Path::GetRoadRightWidth(const double s) const {
+  return GetSample(road_right_width_, s);
+}
+
+bool Path::GetRoadWidth(const double s, double* road_left_width,
+                        double* road_right_width) const {
+  CHECK_NOTNULL(road_left_width);
+  CHECK_NOTNULL(road_right_width);
+
+  if (s < 0.0 || s > length_) {
+    return false;
+  }
+
+  *road_left_width = GetSample(road_left_width_, s);
+  *road_right_width = GetSample(road_right_width_, s);
   return true;
 }
 
@@ -517,12 +769,12 @@ bool Path::IsOnPath(const Vec2d& point) const {
   if (!GetProjection(point, &accumulate_s, &lateral)) {
     return false;
   }
-  double left_width = 0.0;
-  double right_width = 0.0;
-  if (!GetWidth(accumulate_s, &left_width, &right_width)) {
+  double lane_left_width = 0.0;
+  double lane_right_width = 0.0;
+  if (!GetLaneWidth(accumulate_s, &lane_left_width, &lane_right_width)) {
     return false;
   }
-  if (lateral < left_width && lateral > -right_width) {
+  if (lateral < lane_left_width && lateral > -lane_right_width) {
     return true;
   }
   return false;

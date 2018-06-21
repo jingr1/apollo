@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "modules/common/proto/pnc_point.pb.h"
+#include "modules/map/proto/map_geometry.pb.h"
 #include "modules/planning/proto/sl_boundary.pb.h"
 #include "modules/routing/proto/routing.pb.h"
 
@@ -43,7 +44,7 @@ class ReferenceLine {
   template <typename Iterator>
   explicit ReferenceLine(const Iterator begin, const Iterator end)
       : reference_points_(begin, end),
-        map_path_(hdmap::Path(std::vector<hdmap::MapPathPoint>(begin, end))) {}
+        map_path_(std::move(std::vector<hdmap::MapPathPoint>(begin, end))) {}
   explicit ReferenceLine(const std::vector<ReferencePoint>& reference_points);
   explicit ReferenceLine(const hdmap::Path& hdmap_path);
 
@@ -51,7 +52,6 @@ class ReferenceLine {
    * The stitching strategy is to use current reference points as much as
    * possible. The following two examples show two successful stitch cases.
    *
-   * @example
    * Example 1
    * this:   |--------A-----x-----B------|
    * other:                 |-----C------x--------D-------|
@@ -79,21 +79,49 @@ class ReferenceLine {
   const std::vector<ReferencePoint>& reference_points() const;
 
   ReferencePoint GetReferencePoint(const double s) const;
-  ReferencePoint GetNearestReferencepoint(const double s) const;
+  std::vector<ReferencePoint> GetReferencePoints(double start_s,
+                                                 double end_s) const;
+
+  std::size_t GetNearestReferenceIndex(const double s) const;
+
+  ReferencePoint GetNearestReferencePoint(const common::math::Vec2d& xy) const;
+
+  ReferencePoint GetNearestReferencePoint(const double s) const;
+
   ReferencePoint GetReferencePoint(const double x, const double y) const;
 
+  bool GetApproximateSLBoundary(const common::math::Box2d& box,
+                                const double start_s, const double end_s,
+                                SLBoundary* const sl_boundary) const;
   bool GetSLBoundary(const common::math::Box2d& box,
+                     SLBoundary* const sl_boundary) const;
+  bool GetSLBoundary(const hdmap::Polygon& polygon,
                      SLBoundary* const sl_boundary) const;
 
   bool SLToXY(const common::SLPoint& sl_point,
               common::math::Vec2d* const xy_point) const;
   bool XYToSL(const common::math::Vec2d& xy_point,
               common::SLPoint* const sl_point) const;
+  template <class XYPoint>
+  bool XYToSL(const XYPoint& xy, common::SLPoint* const sl_point) const {
+    return XYToSL(common::math::Vec2d(xy.x(), xy.y()), sl_point);
+  }
 
-  bool GetLaneWidth(const double s, double* const left_width,
-                    double* const right_width) const;
+  bool GetLaneWidth(const double s, double* const lane_left_width,
+                    double* const lane_right_width) const;
+  bool GetRoadWidth(const double s, double* const road_left_width,
+                    double* const road_right_width) const;
+
+  void GetLaneFromS(const double s,
+                    std::vector<hdmap::LaneInfoConstPtr>* lanes) const;
+
   bool IsOnRoad(const common::SLPoint& sl_point) const;
   bool IsOnRoad(const common::math::Vec2d& vec2d_point) const;
+  template <class XYPoint>
+  bool IsOnRoad(const XYPoint& xy) const {
+    return IsOnRoad(common::math::Vec2d(xy.x(), xy.y()));
+  }
+  bool IsOnRoad(const SLBoundary& sl_boundary) const;
 
   /**
    * @brief Check if a box is blocking the road surface. The crieria is to check
@@ -115,6 +143,9 @@ class ReferenceLine {
   std::string DebugString() const;
 
   double GetSpeedLimitFromS(const double s) const;
+
+  void AddSpeedLimit(const hdmap::SpeedControl& speed_control);
+  void AddSpeedLimit(double start_s, double end_s, double speed_limit);
 
  private:
   /**
@@ -138,12 +169,27 @@ class ReferenceLine {
   static ReferencePoint Interpolate(const ReferencePoint& p0, const double s0,
                                     const ReferencePoint& p1, const double s1,
                                     const double s);
+  ReferencePoint InterpolateWithMatchedIndex(
+      const ReferencePoint& p0, const double s0, const ReferencePoint& p1,
+      const double s1, const hdmap::InterpolatedIndex& index) const;
 
   static double FindMinDistancePoint(const ReferencePoint& p0, const double s0,
                                      const ReferencePoint& p1, const double s1,
                                      const double x, const double y);
 
  private:
+  struct SpeedLimit {
+    double start_s = 0.0;
+    double end_s = 0.0;
+    double speed_limit = 0.0;  // unit m/s
+    SpeedLimit() = default;
+    SpeedLimit(double _start_s, double _end_s, double _speed_limit)
+        : start_s(_start_s), end_s(_end_s), speed_limit(_speed_limit) {}
+  };
+  /**
+   * This speed limit overrides the lane speed limit
+   **/
+  std::vector<SpeedLimit> speed_limit_;
   std::vector<ReferencePoint> reference_points_;
   hdmap::Path map_path_;
 };

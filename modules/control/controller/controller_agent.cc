@@ -32,18 +32,28 @@ using apollo::common::ErrorCode;
 using apollo::common::Status;
 using apollo::common::time::Clock;
 
-void ControllerAgent::RegisterControllers() {
-  if (!FLAGS_use_mpc) {
-    controller_factory_.Register(
-        ControlConf::LAT_CONTROLLER,
-        []() -> Controller * { return new LatController(); });
-    controller_factory_.Register(
-        ControlConf::LON_CONTROLLER,
-        []() -> Controller * { return new LonController(); });
-  } else {
-    controller_factory_.Register(
-        ControlConf::MPC_CONTROLLER,
-        []() -> Controller * { return new MPCController(); });
+void ControllerAgent::RegisterControllers(const ControlConf *control_conf) {
+  AINFO << "Only support MPC controller or Lat + Lon controllers as of now";
+  for (auto active_controller : control_conf->active_controllers()) {
+    switch (active_controller) {
+      case ControlConf::MPC_CONTROLLER:
+        controller_factory_.Register(
+            ControlConf::MPC_CONTROLLER,
+            []() -> Controller * { return new MPCController(); });
+        break;
+      case ControlConf::LAT_CONTROLLER:
+        controller_factory_.Register(
+            ControlConf::LAT_CONTROLLER,
+            []() -> Controller * { return new LatController(); });
+        break;
+      case ControlConf::LON_CONTROLLER:
+        controller_factory_.Register(
+            ControlConf::LON_CONTROLLER,
+            []() -> Controller * { return new LonController(); });
+        break;
+      default:
+        AERROR << "Unknown active controller type:" << active_controller;
+    }
   }
 }
 
@@ -68,7 +78,7 @@ Status ControllerAgent::InitializeConf(const ControlConf *control_conf) {
 }
 
 Status ControllerAgent::Init(const ControlConf *control_conf) {
-  RegisterControllers();
+  RegisterControllers(control_conf);
   CHECK(InitializeConf(control_conf).ok()) << "Fail to initialize config.";
   for (auto &controller : controller_list_) {
     if (controller == NULL || !controller->Init(control_conf_).ok()) {
@@ -92,9 +102,9 @@ Status ControllerAgent::ComputeControlCommand(
     control::ControlCommand *cmd) {
   for (auto &controller : controller_list_) {
     ADEBUG << "controller:" << controller->Name() << " processing ...";
-    double start_timestamp = Clock::NowInSecond();
+    double start_timestamp = Clock::NowInSeconds();
     controller->ComputeControlCommand(localization, chassis, trajectory, cmd);
-    double end_timestamp = Clock::NowInSecond();
+    double end_timestamp = Clock::NowInSeconds();
     const double time_diff_ms = (end_timestamp - start_timestamp) * 1000;
 
     ADEBUG << "controller: " << controller->Name()

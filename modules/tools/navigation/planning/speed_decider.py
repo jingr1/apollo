@@ -17,8 +17,9 @@
 ###############################################################################
 
 class SpeedDecider:
-    def __init__(self):
-        self.CRUISE_SPEED = 10  # m/s
+    def __init__(self, max_cruise_speed, enable_follow):
+        self.CRUISE_SPEED = max_cruise_speed  # m/s
+        self.enable_follow = enable_follow
 
     def get_target_speed_and_path_length(self, mobileye_provider,
                                          chassis_provider, path_length):
@@ -27,8 +28,8 @@ class SpeedDecider:
         obstacles = mobileye_provider.obstacles
         for obs in obstacles:
             if obs.lane == 1:
-                if (obs.x + obs.length / 2.0) < obstacle_closest_lon:
-                    obstacle_closest_lon = obs.x + obs.length / 2.0
+                if (obs.x - obs.length / 2.0) < obstacle_closest_lon:
+                    obstacle_closest_lon = obs.x - obs.length / 2.0
                     obstacle_speed = obs.rel_speed + \
                                      chassis_provider.get_speed_mps()
 
@@ -39,3 +40,11 @@ class SpeedDecider:
             return self.CRUISE_SPEED, new_path_length
         else:
             return obstacle_speed, new_path_length
+
+    def get(self, mobileye_provider, chassis_provider, path_length):
+        if self.enable_follow:
+            return self.get_target_speed_and_path_length(mobileye_provider,
+                                                         chassis_provider,
+                                                         path_length)
+        else:
+            return self.CRUISE_SPEED, path_length

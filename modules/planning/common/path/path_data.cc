@@ -22,19 +22,21 @@
 
 #include <algorithm>
 #include <limits>
+#include <vector>
 
 #include "modules/common/log.h"
+#include "modules/common/math/cartesian_frenet_conversion.h"
 #include "modules/common/util/string_util.h"
 #include "modules/common/util/util.h"
 #include "modules/planning/common/planning_gflags.h"
 #include "modules/planning/common/planning_util.h"
-#include "modules/planning/math/frame_conversion/cartesian_frenet_conversion.h"
 
 namespace apollo {
 namespace planning {
 
-using apollo::common::SLPoint;
+using apollo::common::math::CartesianFrenetConverter;
 using apollo::common::math::Vec2d;
+using apollo::common::SLPoint;
 
 bool PathData::SetDiscretizedPath(const DiscretizedPath &path) {
   if (reference_line_ == nullptr) {
@@ -72,7 +74,7 @@ const DiscretizedPath &PathData::discretized_path() const {
   return discretized_path_;
 }
 
-bool PathData::IsEmpty() const {
+bool PathData::Empty() const {
   return discretized_path_.NumOfPoints() == 0 &&
          frenet_path_.NumOfPoints() == 0;
 }
@@ -93,7 +95,7 @@ void PathData::SetReferenceLine(const ReferenceLine *reference_line) {
 
 bool PathData::GetPathPointWithPathS(
     const double s, common::PathPoint *const path_point) const {
-  *path_point = discretized_path_.EvaluateUsingLinearApproximation(s);
+  *path_point = discretized_path_.Evaluate(s);
   return true;
 }
 
@@ -134,8 +136,7 @@ bool PathData::GetPathPointWithRefS(const double ref_s,
       discretized_path_.path_points().at(index).s() +
       r * (discretized_path_.path_points().at(index + 1).s() -
            discretized_path_.path_points().at(index).s());
-  path_point->CopyFrom(
-      discretized_path_.EvaluateUsingLinearApproximation(discretized_path_s));
+  path_point->CopyFrom(discretized_path_.Evaluate(discretized_path_s));
 
   return true;
 }
@@ -185,11 +186,14 @@ bool PathData::SLToXY(const FrenetFramePath &frenet_path,
 
     if (path_points.empty()) {
       path_point.set_s(0.0);
+      path_point.set_dkappa(0.0);
     } else {
       common::math::Vec2d last(path_points.back().x(), path_points.back().y());
       common::math::Vec2d current(path_point.x(), path_point.y());
       double distance = (last - current).Length();
       path_point.set_s(path_points.back().s() + distance);
+      path_point.set_dkappa((path_point.kappa() - path_points.back().kappa()) /
+                            distance);
     }
     path_points.push_back(std::move(path_point));
   }
